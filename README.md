@@ -25,15 +25,3 @@ is by sending an email to projects@drogon.net
 Thanks!
 
   -Gordon
-
-
-   同步  git://git.drogon.net/wiringPi 最新源代码到项目当中。
-     此修改基于 原来的master 分支  
-
-   `   git remote add upstream git://git.drogon.net/wiringPi  `
-
-   `    git fetch upstream master:upstream/master  `
-
-   `     git merge upstream/master     `
-
-   `     git push origin master:master  `

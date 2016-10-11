@@ -284,8 +284,6 @@ static uint64_t epochMilli, epochMicro ;
 // Misc
 
 static int wiringPiMode = WPI_MODE_UNINITIALISED ;
-static volatile int    pinPass = -1 ;
-static pthread_mutex_t pinMutex ;
 
 // Debugging & Return codes
 
@@ -309,8 +307,16 @@ static int sysFds [64] =
 
 // ISR Data
 
-static void (*isrFunctions [64])(void) ;
+typedef struct _isrThreadData {
+  int pin;
+  void *data;
+} isrThreadData;
 
+typedef void (*isrFunction)(void) ;
+typedef void (*isrFunctionWithData)(void *) ;
+
+static isrFunction isrFunctions [64] ;
+static isrFunctionWithData isrFunctionsWithData [64] ;
 
 // Doing it the Arduino way with lookup tables...
 //	Yes, it's probably more innefficient than all the bit-twidling, but it
@@ -1799,32 +1805,35 @@ int waitForInterrupt (int pin, int mS)
 
 static void *interruptHandler (void *arg)
 {
+  isrThreadData *threadData = (isrThreadData *) arg ;
   int myPin ;
 
   (void)piHiPri (55) ;	// Only effective if we run as root
 
-  myPin   = pinPass ;
-  pinPass = -1 ;
+  myPin = threadData->pin ;
 
   for (;;)
     if (waitForInterrupt (myPin, -1) > 0)
-      isrFunctions [myPin] () ;
+      if (isrFunctionsWithData [myPin] == NULL)
+        isrFunctions [myPin] () ;
+      else
+        isrFunctionsWithData [myPin] (threadData->data) ;
 
   return NULL ;
 }
 
 
 /*
- * wiringPiISR:
+ * wiringPiISRData:
  *	Pi Specific.
  *	Take the details and create an interrupt handler that will do a call-
- *	back to the user supplied function.
+ *	back to the user supplied function with the given pointer as the only parameter.
  *********************************************************************************
  */
-
-int wiringPiISR (int pin, int mode, void (*function)(void))
+int wiringPiISRData (int pin, int mode, void (*function)(void *), void *data)
 {
   pthread_t threadId ;
+  isrThreadData *threadData;
   const char *modeS ;
   char fName   [64] ;
   char  pinS [8] ;
@@ -1869,16 +1878,16 @@ int wiringPiISR (int pin, int mode, void (*function)(void))
     {
       /**/ if (access ("/usr/local/bin/gpio", X_OK) == 0)
       {
-	execl ("/usr/local/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
-	return wiringPiFailure (WPI_FATAL, "wiringPiISR: execl failed: %s\n", strerror (errno)) ;
+        execl ("/usr/local/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
+        return wiringPiFailure (WPI_FATAL, "wiringPiISR: execl failed: %s\n", strerror (errno)) ;
       }
       else if (access ("/usr/bin/gpio", X_OK) == 0)
       {
-	execl ("/usr/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
-	return wiringPiFailure (WPI_FATAL, "wiringPiISR: execl failed: %s\n", strerror (errno)) ;
+        execl ("/usr/bin/gpio", "gpio", "edge", pinS, modeS, (char *)NULL) ;
+        return wiringPiFailure (WPI_FATAL, "wiringPiISR: execl failed: %s\n", strerror (errno)) ;
       }
       else
-	return wiringPiFailure (WPI_FATAL, "wiringPiISR: Can't find gpio program\n") ;
+        return wiringPiFailure (WPI_FATAL, "wiringPiISR: Can't find gpio program\n") ;
     }
     else		// Parent, wait
       wait (NULL) ;
@@ -1900,16 +1909,41 @@ int wiringPiISR (int pin, int mode, void (*function)(void))
   for (i = 0 ; i < count ; ++i)
     read (sysFds [bcmGpioPin], &c, 1) ;
 
-  isrFunctions [pin] = function ;
+  if (data == NULL)
+  {
+    isrFunctions [pin] = (isrFunction) function ;
+    isrFunctionsWithData [pin] = NULL ;
+  }
+  else
+  {
+    isrFunctions [pin] = NULL ;
+    isrFunctionsWithData [pin] = function ;
+  }
 
-  pthread_mutex_lock (&pinMutex) ;
-    pinPass = pin ;
-    pthread_create (&threadId, NULL, interruptHandler, NULL) ;
-    while (pinPass != -1)
-      delay (1) ;
-  pthread_mutex_unlock (&pinMutex) ;
+  threadData = malloc(sizeof(isrThreadData));
+  if (threadData == NULL) {
+    return wiringPiFailure (WPI_FATAL, "wiringPiISR: unable to allocate memory\n", strerror (errno)) ;
+  }
+
+  threadData->pin = pin;
+  threadData->data = data;
+
+  pthread_create (&threadId, NULL, interruptHandler, (void *) threadData) ;
 
   return 0 ;
+}
+
+
+/*
+ * wiringPiISR:
+ *	Pi Specific.
+ *	Take the details and create an interrupt handler that will do a call-
+ *	back to the user supplied function.
+ *********************************************************************************
+ */
+int wiringPiISR (int pin, int mode, void (*function)(void))
+{
+  return wiringPiISRData(pin, mode, (isrFunctionWithData) function, NULL);
 }
 
 
@@ -2059,6 +2093,8 @@ int wiringPiSetup (void)
 
   alreadyCalled = TRUE ;
 
+  memset(isrFunctions, 0, sizeof(isrFunctions) * sizeof(isrFunctions[0]));
+  memset(isrFunctionsWithData, 0, sizeof(isrFunctionsWithData) * sizeof(isrFunctionsWithData[0]));
 
   if (getenv (ENV_DEBUG) != NULL)
     wiringPiDebug = TRUE ;
@@ -2135,25 +2171,25 @@ int wiringPiSetup (void)
 //	GPIO:
 
   gpio = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_BASE) ;
-  if ((int32_t)gpio == -1)
+  if ((intptr_t)gpio == -1)
     return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (GPIO) failed: %s\n", strerror (errno)) ;
 
 //	PWM
 
   pwm = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_PWM) ;
-  if ((int32_t)pwm == -1)
+  if ((intptr_t)pwm == -1)
     return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (PWM) failed: %s\n", strerror (errno)) ;
  
 //	Clock control (needed for PWM)
 
   clk = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_CLOCK_BASE) ;
-  if ((int32_t)clk == -1)
+  if ((intptr_t)clk == -1)
     return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (CLOCK) failed: %s\n", strerror (errno)) ;
  
 //	The drive pads
 
   pads = (uint32_t *)mmap(0, BLOCK_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, fd, GPIO_PADS) ;
-  if ((int32_t)pads == -1)
+  if ((intptr_t)pads == -1)
     return wiringPiFailure (WPI_ALMOST, "wiringPiSetup: mmap (PADS) failed: %s\n", strerror (errno)) ;
 
 #ifdef	USE_TIMER
