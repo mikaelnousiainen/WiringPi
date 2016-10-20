@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 2.8)
 project(wiringPi)
 
-add_subdirectory(devLib)
-add_subdirectory(gpio)
+OPTION (WIRINGPI_BUILD_DEVLIB "Build WiringPi devLib" ON)
+OPTION (WIRINGPI_BUILD_GPIO "Build WiringPi GPIO tool" ON)
+
+IF (WIRINGPI_BUILD_DEVLIB)
+  add_subdirectory(devLib)
+ENDIF ()
+IF (WIRINGPI_BUILD_GPIO)
+  add_subdirectory(gpio)
+ENDIF()
 #add_subdirectory(pins)
 add_subdirectory(wiringPi)
 
