@@ -12,7 +12,7 @@ add_definitions("-lpthread")
 
 set_target_properties(libwiringPiDev PROPERTIES OUTPUT_NAME "wiringPiDev")
 
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
+#set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
 
 install(FILES ${WPI_DEVLIB_HEADERS} DESTINATION include)
 install(TARGETS libwiringPiDev DESTINATION lib)

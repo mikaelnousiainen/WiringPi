@@ -30,7 +30,7 @@ add_library(libwiringPi SHARED ${WPI_SRC})
 add_definitions("-lpthread")
 set_target_properties(libwiringPi PROPERTIES OUTPUT_NAME "wiringPi")
 
-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
+#set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
 
 install(FILES ${WPI_HEADERS} DESTINATION include)
 install(TARGETS libwiringPi DESTINATION lib)
