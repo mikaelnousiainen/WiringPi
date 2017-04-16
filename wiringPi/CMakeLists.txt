@@ -33,7 +33,7 @@ set(WPI_SRC wiringPi.c
 include_directories(${PROJECT_SOURCE_DIR}/wiringPi)
 
 add_library(libwiringPi SHARED ${WPI_SRC})
-add_definitions("-lpthread -lcrypt -lrt")
+target_link_libraries(libwiringPi pthread crypt rt)
 set_target_properties(libwiringPi PROPERTIES OUTPUT_NAME "wiringPi")
 
 #set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/dist)
