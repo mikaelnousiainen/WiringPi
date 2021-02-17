@@ -1,7 +1,7 @@
 /*
  * readall.c:
  *	The readall functions - getting a bit big, so split them out.
- *	Copyright (c) 2012-2017 Gordon Henderson
+ *	Copyright (c) 2012-2018 Gordon Henderson
  ***********************************************************************
  * This file is part of wiringPi:
  *	https://projects.drogon.net/raspberry-pi/wiringpi/
@@ -80,7 +80,7 @@ static char *alts [] =
   "IN", "OUT", "ALT5", "ALT4", "ALT0", "ALT1", "ALT2", "ALT3"
 } ;
 
-static int physToWpi [64] = 
+static int physToWpi [64] =
 {
   -1,           // 0
   -1, -1,       // 1, 2
@@ -113,7 +113,7 @@ static int physToWpi [64] =
   -1, -1, -1, -1, -1, -1, -1, -1, -1
 } ;
 
-static char *physNames [64] = 
+static char *physNames [64] =
 {
   NULL,
 
@@ -287,24 +287,32 @@ void abReadall (int model, int rev)
 
 /*
  * piPlusReadall:
- *	Read all the pins on the model A+ or the B+
+ *	Read all the pins on the model A+ or the B+ or actually, all 40-pin Pi's
  *********************************************************************************
  */
 
 static void plus2header (int model)
 {
   /**/ if (model == PI_MODEL_AP)
-    printf (" +-----+-----+---------+------+---+--A Plus--+---+------+---------+-----+-----+\n") ;
+    printf (" +-----+-----+---------+------+---+---Pi A+--+---+------+---------+-----+-----+\n") ;
   else if (model == PI_MODEL_BP)
-    printf (" +-----+-----+---------+------+---+--B Plus--+---+------+---------+-----+-----+\n") ;
+    printf (" +-----+-----+---------+------+---+---Pi B+--+---+------+---------+-----+-----+\n") ;
   else if (model == PI_MODEL_ZERO)
     printf (" +-----+-----+---------+------+---+-Pi Zero--+---+------+---------+-----+-----+\n") ;
   else if (model == PI_MODEL_ZERO_W)
     printf (" +-----+-----+---------+------+---+-Pi ZeroW-+---+------+---------+-----+-----+\n") ;
   else if (model == PI_MODEL_2)
     printf (" +-----+-----+---------+------+---+---Pi 2---+---+------+---------+-----+-----+\n") ;
-  else if (model == PI_MODEL_3)
-    printf (" +-----+-----+---------+------+---+---Pi 3---+---+------+---------+-----+-----+\n") ;
+  else if (model == PI_MODEL_3B)
+    printf (" +-----+-----+---------+------+---+---Pi 3B--+---+------+---------+-----+-----+\n") ;
+  else if (model == PI_MODEL_3BP)
+    printf (" +-----+-----+---------+------+---+---Pi 3B+-+---+------+---------+-----+-----+\n") ;
+  else if (model == PI_MODEL_3AP)
+    printf (" +-----+-----+---------+------+---+---Pi 3A+-+---+------+---------+-----+-----+\n") ;
+  else if (model == PI_MODEL_4B)
+    printf (" +-----+-----+---------+------+---+---Pi 4B--+---+------+---------+-----+-----+\n") ;
+  else if (model == PI_MODEL_400)
+    printf (" +-----+-----+---------+------+---+---Pi 400-+---+------+---------+-----+-----+\n") ;
   else
     printf (" +-----+-----+---------+------+---+---Pi ?---+---+------+---------+-----+-----+\n") ;
 }
@@ -348,13 +356,19 @@ void doReadall (void)
 
   /**/ if ((model == PI_MODEL_A) || (model == PI_MODEL_B))
     abReadall (model, rev) ;
-  else if ((model == PI_MODEL_BP) || (model == PI_MODEL_AP) || (model == PI_MODEL_2) || (model == PI_MODEL_3) || (model == PI_MODEL_ZERO) || (model == PI_MODEL_ZERO_W))
+  else if ((model == PI_MODEL_BP) || (model == PI_MODEL_AP) ||
+	(model == PI_MODEL_2)    ||
+	(model == PI_MODEL_3AP)  ||
+	(model == PI_MODEL_3B)   || (model == PI_MODEL_3BP) ||
+	(model == PI_MODEL_4B)   || (model == PI_MODEL_400) ||
+	(model == PI_MODEL_ZERO) || (model == PI_MODEL_ZERO_W))
     piPlusReadall (model) ;
-  else if ((model == PI_MODEL_CM) || (model == PI_MODEL_CM3))
+  else if ((model == PI_MODEL_CM) || (model == PI_MODEL_CM3) || (model == PI_MODEL_CM3P) || (model == PI_MODEL_CM4))
     allReadall () ;
   else
     printf ("Oops - unable to determine board type... model: %d\n", model) ;
 }
+
 
 /*
  * doAllReadall:
@@ -365,4 +379,25 @@ void doReadall (void)
 void doAllReadall (void)
 {
   allReadall () ;
+}
+
+
+/*
+ * doQmode:
+ *	Query mode on a pin
+ *********************************************************************************
+ */
+
+void doQmode (int argc, char *argv [])
+{
+  int pin ;
+
+  if (argc != 3)
+  {
+    fprintf (stderr, "Usage: %s qmode pin\n", argv [0]) ;
+    exit (EXIT_FAILURE) ;
+  }
+
+  pin = atoi (argv [2]) ;
+  printf ("%s\n", alts [getAlt (pin)]) ;
 }
